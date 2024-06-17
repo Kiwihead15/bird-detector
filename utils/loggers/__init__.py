@@ -1,4 +1,4 @@
-# YOLOv5 🚀 by Ultralytics, AGPL-3.0 license
+# Ultralytics YOLOv5 🚀, AGPL-3.0 license
 """Logging utils."""
 
 import json
@@ -21,7 +21,10 @@ RANK = int(os.getenv("RANK", -1))
 try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:
-    SummaryWriter = lambda *args: None  # None = SummaryWriter(str)
+
+    def SummaryWriter(*args):
+        return None  # None = SummaryWriter(str)
+
 
 try:
     import wandb
@@ -382,7 +385,7 @@ class GenericLogger:
                 prefix = colorstr("ClearML: ")
                 LOGGER.warning(
                     f"{prefix}WARNING ⚠️ ClearML is installed but not configured, skipping ClearML logging."
-                    f" See https://github.com/ultralytics/yolov5/tree/master/utils/loggers/clearml#readme"
+                    f" See https://docs.ultralytics.com/yolov5/tutorials/clearml_logging_integration"
                 )
         else:
             self.clearml = None
