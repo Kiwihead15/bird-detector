@@ -34,6 +34,7 @@ import os
 import platform
 import sys
 from pathlib import Path
+import time
 
 import torch
 
@@ -96,6 +97,7 @@ def run(
     half=False,  # use FP16 half-precision inference
     dnn=False,  # use OpenCV DNN for ONNX inference
     vid_stride=1,  # video frame-rate stride
+    save_time=False # choose to save timestamp for the detection
 ):
     source = str(source)
     save_img = not nosave and not source.endswith(".txt")  # save inference images
@@ -133,11 +135,11 @@ def run(
     seen, windows, dt = 0, [], (Profile(device=device), Profile(device=device), Profile(device=device))
     for path, im, im0s, vid_cap, s in dataset:
         with dt[0]:
-            im = torch.from_numpy(im).to(model.device)
+            im = torch.from_numpy(im).to(model.device)  # Converts im from NumPy array to a PyTorch tensor
             im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
-            im /= 255  # 0 - 255 to 0.0 - 1.0
+            im /= 255  # Normalizes pixel values from 0 - 255 to 0.0 - 1.0
             if len(im.shape) == 3:
-                im = im[None]  # expand for batch dim
+                im = im[None]  # expand for batch dim if the image is processed alone (not in a batch)
             if model.xml and im.shape[0] > 1:
                 ims = torch.chunk(im, im.shape[0], 0)
 
@@ -154,6 +156,14 @@ def run(
                 pred = [pred, None]
             else:
                 pred = model(im, augment=augment, visualize=visualize)
+            for detected_object in pred:
+                detection_data=[]
+                if save_time:
+                    timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+                    detection_data.append({'timestamp': timestamp})
+                else:
+                    None
+                    #detection_data.append({'object': detected_object})
         # NMS
         with dt[2]:
             pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
@@ -213,7 +223,14 @@ def run(
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                         line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
                         with open(f"{txt_path}.txt", "a") as f:
-                            f.write(("%g " * len(line)).rstrip() % line + "\n")
+                            #f.write(("%g " * len(line)).rstrip() % line + "\n")
+                            time_index = 0
+                            if save_time: # save timestamp to file
+                                f.write(("%g " * len(line)).rstrip() % line + f", {detection_data[time_index]}" + "\n")
+
+                                time_index+=1
+                            else:
+                                f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
                     if save_img or save_crop or view_img:  # Add bbox to image
                         c = int(cls)  # integer class
@@ -295,6 +312,7 @@ def parse_opt():
     parser.add_argument("--half", action="store_true", help="use FP16 half-precision inference")
     parser.add_argument("--dnn", action="store_true", help="use OpenCV DNN for ONNX inference")
     parser.add_argument("--vid-stride", type=int, default=1, help="video frame-rate stride")
+    parser.add_argument('--save_time', action='store_true', help='Save the timestamp of each detection')
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
     print_args(vars(opt))
